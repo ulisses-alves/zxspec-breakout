@@ -1,36 +1,78 @@
     org $8000
     di
     call ClearScreen
-    ld bc, $0100
-    call GetScreenPos
-    ld a, $ff
-    ld b, e
-    call ShiftRight
-    ld (hl), a
+    ld b, 80
+    ld c, 50
+    ld de, BallSprite
+    call DrawSprite
     jr InfLoop
-
 
 InfLoop:
     jr InfLoop
+
+; Draws a 8x8 sprite on coordinate.
+; b: x, c: y, de: sprite-address
+DrawSprite:
+    ld a, 8
+DrawSpriteRec:
+    push af ; Store sprite line counter
+        push bc ; Store coordinates
+            push de ; Store sprite address
+                call GetScreenPos
+                ld c, e ; Store right-shift
+            pop de ; Restore sprite address
+            ld a, (de) ; Load sprite
+            ld b, c ; Set shift
+            call ShiftRight ; Apply right-shift to sprite
+            ld (hl), a ; Draw
+            inc c
+            dec c
+            jp z, DrawSpriteContinue ; Drew whole sprite?
+            ld a, 8
+            sub c ; Calc left shift for next x address
+            ld b, a
+            ld a, (de)
+            call ShiftLeft
+            inc l ; Next x screen addresss
+            ld (hl), a ; Draw
+DrawSpriteContinue:
+            inc de
+        pop bc ; Restore coordinates
+        inc c ; Move to next Y coordinate
+    pop af ; Restore sprite line counter
+    dec a
+    jp nz, DrawSpriteRec
+    ret
+
+
+BallSprite:
+    defb %00111100
+    defb %01000010
+    defb %10010001
+    defb %10100001
+    defb %10000001
+    defb %10000001
+    defb %01000010
+    defb %00111100
 
 
 ; * a
 ClearScreen:
     xor a ; Pick border color (black)
     call $229b ; Set border color
-    ld a, $0f
-    ld ($5c8d), a ; Pick background color (black)
+    ld a, $0f ; Pick background color (black)
+    ld ($5c8d), a
     call $0daf ; Set background
     ret
 
 
-; b: x, c: y => hl: address, e: x-shift
+; b: x, c: y => hl: address, e: right-shift
 ; * a, b, e, h, l
 GetScreenPos:
     push bc
         ld c, 8
         call DivWithMod
-        ld e, b ; store x-shift
+        ld e, b ; store right-shift
     pop bc
     ld b, d
     ld a, c
@@ -50,6 +92,11 @@ GetScreenPos:
     and %00000111
     or b
     ld h, a
+    ret
+
+    
+GetNextLineUpdateH:
+    inc h
     ret
 
 
@@ -75,6 +122,18 @@ ShiftRight:
 ShiftRightRec:
     srl a
     djnz ShiftRightRec
+    ret
+
+
+; a: value, b: count => a: result
+; * a, b
+ShiftLeft:
+    inc b
+    dec b
+    ret z
+ShiftLeftRec:
+    sla a
+    djnz ShiftLeftRec
     ret
 
 
